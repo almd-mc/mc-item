@@ -1,0 +1,120 @@
+import json
+
+// Minecraft Item definitions.
+//
+// Usage:
+//   import mc_item as item
+//   let sword = item.new(1, 276, 1)  // slot, item_id, count
+//   let name = item.name_of(sword, registry)
+
+type Item = {
+  id: Int,
+  count: Int,
+  damage: Int,
+  nbt: Value,
+}
+
+type Slot = | Empty | Filled(Item)
+
+fn empty() -> Slot = Empty
+
+fn new(id: Int, count: Int) -> Slot =
+  Filled({ id: id, count: count, damage: 0, nbt: value.null() })
+
+fn with_damage(id: Int, count: Int, damage: Int) -> Slot =
+  Filled({ id: id, count: count, damage: damage, nbt: value.null() })
+
+fn with_nbt(id: Int, count: Int, nbt: Value) -> Slot =
+  Filled({ id: id, count: count, damage: 0, nbt: nbt })
+
+fn is_empty(slot: Slot) -> Bool = match slot { Empty => true, Filled(_) => false }
+
+fn item(slot: Slot) -> Option[Item] = match slot { Empty => none, Filled(i) => some(i) }
+
+fn count(slot: Slot) -> Int = match slot { Empty => 0, Filled(i) => i.count }
+
+fn id(slot: Slot) -> Int = match slot { Empty => -1, Filled(i) => i.id }
+
+// ── Inventory ───────────────────────────────────
+
+type Inventory = { slots: List[Slot], size: Int }
+
+fn new_inventory(size: Int) -> Inventory =
+  { slots: list.repeat(Empty, size), size: size }
+
+fn get_slot(inv: Inventory, idx: Int) -> Slot =
+  list.get(inv.slots, idx) ?? Empty
+
+fn set_slot(inv: Inventory, idx: Int, slot: Slot) -> Inventory =
+  { ...inv, slots: list.set(inv.slots, idx, slot) }
+
+fn find_item(inv: Inventory, item_id: Int) -> Option[Int] = {
+  let found = inv.slots |> list.enumerate |> list.find((entry) => {
+    let (_, slot) = entry
+    match slot { Filled(i) => i.id == item_id, Empty => false }
+  })
+  match found { some((idx, _)) => some(idx), none => none }
+}
+
+fn count_item(inv: Inventory, item_id: Int) -> Int =
+  inv.slots |> list.fold(0, (acc, slot) =>
+    match slot { Filled(i) => if i.id == item_id then acc + i.count else acc, Empty => acc }
+  )
+
+fn empty_slots(inv: Inventory) -> Int =
+  inv.slots |> list.fold(0, (acc, slot) => if is_empty(slot) then acc + 1 else acc)
+
+// ── Player inventory helpers ────────────────────
+
+let PLAYER_INV_SIZE = 46
+let HOTBAR_START = 36
+let HOTBAR_END = 45
+
+fn player_inventory() -> Inventory = new_inventory(PLAYER_INV_SIZE)
+
+fn held_item(inv: Inventory, hotbar_slot: Int) -> Slot =
+  get_slot(inv, HOTBAR_START + hotbar_slot)
+
+// ── Tests ───────────────────────────────────────
+
+test "empty slot" {
+  assert(is_empty(empty()))
+  assert_eq(count(empty()), 0)
+}
+
+test "create item" {
+  let slot = new(276, 1)
+  assert(not is_empty(slot))
+  assert_eq(count(slot), 1)
+  assert_eq(id(slot), 276)
+}
+
+test "inventory" {
+  var inv = player_inventory()
+  inv = set_slot(inv, 0, new(1, 64))
+  inv = set_slot(inv, 1, new(1, 32))
+  inv = set_slot(inv, 2, new(276, 1))
+  assert_eq(count_item(inv, 1), 96)
+  assert_eq(count_item(inv, 276), 1)
+}
+
+test "find item" {
+  var inv = new_inventory(9)
+  inv = set_slot(inv, 3, new(276, 1))
+  match find_item(inv, 276) {
+    some(idx) => assert_eq(idx, 3),
+    none => assert(false),
+  }
+}
+
+test "empty slots count" {
+  var inv = new_inventory(9)
+  inv = set_slot(inv, 0, new(1, 64))
+  assert_eq(empty_slots(inv), 8)
+}
+
+test "held item" {
+  var inv = player_inventory()
+  inv = set_slot(inv, HOTBAR_START, new(276, 1))
+  assert_eq(id(held_item(inv, 0)), 276)
+}
