@@ -85,7 +85,7 @@ fn count_item(inv: Inventory, item_id: Int) -> Int = {
 
 fn first_empty_slot(inv: Inventory) -> Option[Int] = {
   var found: Option[Int] = none
-  for i in 0..inv.size {
+  for i in 0..<inv.size {
     if is_empty(get_slot(inv, i)) and found == none then { found = some(i) } else { () }
   }
   found
